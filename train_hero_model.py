@@ -4,6 +4,7 @@ import os
 from configs.settings import settings
 from src.ai_balancer.ingestion.opendota import rank_bucket
 from src.ai_balancer.training.hero_draft_baseline import (
+    load_bulk_matches,
     load_processed_matches,
     save_model,
     train_hero_draft_model,
@@ -13,6 +14,10 @@ from src.ai_balancer.training.hero_draft_baseline import (
 def main():
     parser = argparse.ArgumentParser(description="Train a baseline hero-draft win probability model")
     parser.add_argument("--processed-dir", default=settings.RANKED_PROCESSED_DATA_DIR)
+    parser.add_argument("--bulk-dir", default=None,
+                        help="Optional dir with drafts_*.jsonl from collect_bulk_drafts.py; merged into training data")
+    parser.add_argument("--processed-only", action="store_true",
+                        help="Skip default processed dir (use only --bulk-dir)")
     parser.add_argument("--model-path", default=None)
     parser.add_argument("--epochs", type=int, default=25)
     parser.add_argument("--learning-rate", type=float, default=0.05)
@@ -26,7 +31,14 @@ def main():
     )
     args = parser.parse_args()
 
-    matches = load_processed_matches(args.processed_dir)
+    matches = [] if args.processed_only else load_processed_matches(args.processed_dir)
+    if args.bulk_dir:
+        bulk = load_bulk_matches(args.bulk_dir)
+        print(f"Bulk draft matches loaded: {len(bulk)}")
+        matches.extend(bulk)
+    if not matches:
+        print("No training data found")
+        return
     if args.min_rank_tier > 0:
         matches = [match for match in matches if (match.avg_rank_tier or 0) >= args.min_rank_tier]
     if args.rank_bucket != "all":

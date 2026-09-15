@@ -1,10 +1,9 @@
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
-# Field values copied here for documentation/validation of known OpenDota codes.
-# See https://docs.opendota.com/ for the canonical tables.
 LOBBY_TYPE_RANKED = 7
 GAME_MODE_ALL_PICK = 22
+
 
 class ProvenanceMetadata(BaseModel):
     source: str
@@ -12,7 +11,13 @@ class ProvenanceMetadata(BaseModel):
     match_id: int
     collection_timestamp: float
     status_code: int
-    schema_version: str = "1.0.0"
+    schema_version: str = "1.1.0"
+
+
+class Purchase(BaseModel):
+    time: int = Field(description="Seconds from match start; negative values mean pre-game purchases")
+    item_name: str = Field(description="OpenDota item key, e.g. black_king_bar")
+
 
 class Player(BaseModel):
     account_id: Optional[int] = Field(default=None, description="Null for anonymous players")
@@ -25,10 +30,16 @@ class Player(BaseModel):
     net_worth: Optional[int] = None
     gpm: Optional[int] = None
     xpm: Optional[int] = None
+    early_gpm: Optional[float] = Field(
+        default=None,
+        description="Gold earned per minute by minute 10, from gold_t[10]; pre-purchase farm context",
+    )
 
     # Missing/Delayed fields marked as optional for Phase 1
     role: Optional[int] = None
     lane: Optional[int] = None
+    purchases: List[Purchase] = Field(default_factory=list)
+
 
 class Match(BaseModel):
     match_id: int
@@ -41,3 +52,4 @@ class Match(BaseModel):
     region: Optional[int] = None
     avg_rank_tier: Optional[int] = Field(default=None, description="Average rank tier; null if unknown")
     players: List[Player] = Field(min_length=10, max_length=10)
+

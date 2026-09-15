@@ -135,6 +135,52 @@ def load_processed_matches(processed_dir: str) -> List[Match]:
     return matches
 
 
+def load_bulk_matches(bulk_dir: str) -> List[Match]:
+    """Load draft-only JSONL files produced by collect_bulk_drafts.py into Match objects.
+
+    Player stats are zero-filled: the draft model only uses hero_id and team.
+    """
+    from src.ai_balancer.schemas.match import Player
+
+    matches: List[Match] = []
+    for path in sorted(Path(bulk_dir).glob("drafts_*.jsonl")):
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                record = json.loads(line)
+                players = [
+                    Player(
+                        player_slot=p["player_slot"],
+                        hero_id=p["hero_id"],
+                        team=0 if p["player_slot"] < 128 else 1,
+                        kills=0,
+                        deaths=0,
+                        assists=0,
+                    )
+                    for p in record.get("players", [])
+                    if "players" in record
+                ]
+                # Compact format stores radiant/dire lists after validation.
+                if not players:
+                    players = (
+                        [Player(player_slot=i, hero_id=h, team=0, kills=0, deaths=0, assists=0) for i, h in enumerate(record.get("radiant", []))]
+                        + [Player(player_slot=128 + i, hero_id=h, team=1, kills=0, deaths=0, assists=0) for i, h in enumerate(record.get("dire", []))]
+                    )
+                matches.append(Match(
+                    match_id=record["match_id"],
+                    start_time=int(record.get("start_time") or 0),
+                    duration=int(record.get("duration") or 1),
+                    radiant_win=bool(record.get("radiant_win")),
+                    game_mode=22,
+                    lobby_type=7,
+                    avg_rank_tier=record.get("avg_rank_tier"),
+                    players=players,
+                ))
+    return matches
+
+
 def save_model(model: Dict[str, object], model_path: str) -> str:
     path = Path(model_path)
     path.parent.mkdir(parents=True, exist_ok=True)

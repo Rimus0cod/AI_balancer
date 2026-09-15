@@ -1,5 +1,6 @@
 from src.ai_balancer.processing.transformer import (
     determine_team,
+    extract_purchases,
     transform_opendota_match,
     validate_and_report,
 )
@@ -18,12 +19,18 @@ def make_raw_match(player_count=10):
                 "deaths": 10 - index,
                 "assists": index * 2,
                 "net_worth": 5000 + index,
-                "gold_per_min": 400 + index,
-                "xp_per_min": 500 + index,
-                "rank_tier": 55,
-                "lane": 1,
-                "lane_role": 2,
-            }
+                 "gold_per_min": 400 + index,
+                 "xp_per_min": 500 + index,
+                 "rank_tier": 55,
+                 "lane": 1,
+                 "lane_role": 2,
+                 "gold_t": [0, 100, 200, 400, 600, 800, 1100, 1300, 1600, 1800, 2200, 2600],
+                 "purchase_log": [
+                     {"time": -90, "key": "tango"},
+                     {"time": 300, "key": "power_treads"},
+                     {"time": 1200, "key": "black_king_bar"},
+                 ],
+             }
         )
 
     return {
@@ -59,6 +66,15 @@ def test_transform_opendota_match_normalizes_core_fields():
     assert match.players[0].xpm == 500
     assert match.players[0].role == 2
     assert match.avg_rank_tier == 55
+    assert match.players[0].early_gpm == 220.0  # gold_t[10]=2200 -> 220 gpm by minute 10
+    assert len(match.players[0].purchases) == 3
+    assert match.players[0].purchases[2].item_name == "black_king_bar"
+
+
+def test_extract_purchases_ignores_malformed_entries():
+    purchases = extract_purchases({"purchase_log": [{"time": 10, "key": "clarity"}, {"time": None}, {"time": 9}]})
+    assert len(purchases) == 1
+    assert purchases[0].item_name == "clarity"
 
 
 def test_validate_and_report_passes_valid_match():

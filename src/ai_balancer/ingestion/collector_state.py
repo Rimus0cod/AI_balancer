@@ -86,7 +86,11 @@ class CollectorState:
         return {int(match_id) for match_id in self.bucket(bucket_name).get("ids", [])}
 
     def count(self, bucket_name: str) -> int:
-        return len(self.bucket(bucket_name).get("ids", []))
+        bucket = self.bucket(bucket_name)
+        explicit = bucket.get("count")
+        if explicit is not None:
+            return int(explicit)
+        return len(bucket.get("ids", []))
 
     def record_match(self, bucket_name: str, match_id: int) -> None:
         bucket = self.bucket(bucket_name)

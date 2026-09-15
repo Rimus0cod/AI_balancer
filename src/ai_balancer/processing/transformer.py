@@ -1,5 +1,5 @@
 from pydantic import ValidationError
-from src.ai_balancer.schemas.match import Match, Player
+from src.ai_balancer.schemas.match import Match, Player, Purchase
 
 
 def determine_team(player_slot: int) -> int:
@@ -21,6 +21,31 @@ def derive_avg_rank_tier(raw: dict):
     return round(sum(rank_tiers) / len(rank_tiers))
 
 
+def derive_early_gpm(raw_player: dict):
+    """GPM by minute 10 from cumulative gold_t; a pre-purchase farm covariate.
+
+    Final GPM is a post-purchase outcome (farm items accelerate farming), so it
+    cannot separate "item made the hero rich" from "rich hero bought the item".
+    """
+    gold_t = raw_player.get("gold_t")
+    if isinstance(gold_t, list) and len(gold_t) > 10:
+        value = gold_t[10]
+        if isinstance(value, (int, float)):
+            return round(value / 10.0, 1)
+    return None
+
+
+def extract_purchases(raw_player: dict):
+    purchases = []
+    for entry in raw_player.get("purchase_log", []):
+        item_name = entry.get("key")
+        time_value = entry.get("time")
+        if not item_name or time_value is None:
+            continue
+        purchases.append(Purchase(time=int(time_value), item_name=str(item_name)))
+    return purchases
+
+
 def transform_opendota_match(raw: dict) -> Match:
     """Transforms raw OpenDota JSON into our normalized Match schema."""
     players = []
@@ -36,8 +61,10 @@ def transform_opendota_match(raw: dict) -> Match:
             net_worth=p.get("net_worth"),
             gpm=p.get("gold_per_min"),
             xpm=p.get("xp_per_min"),
+            early_gpm=derive_early_gpm(p),
             lane=p.get("lane"),
-            role=p.get("lane_role")
+            role=p.get("lane_role"),
+            purchases=extract_purchases(p),
         ))
 
     return Match(
@@ -52,6 +79,7 @@ def transform_opendota_match(raw: dict) -> Match:
         avg_rank_tier=derive_avg_rank_tier(raw),
         players=players
     )
+
 
 def validate_and_report(raw_data: dict):
     """Validates data and returns (Match_object, Error_Report)."""
